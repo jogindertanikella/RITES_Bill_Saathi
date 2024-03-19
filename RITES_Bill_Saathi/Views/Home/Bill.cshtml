@@ -1,0 +1,8 @@
+﻿@model BillDetails
+
+<div style="text-align:center;">
+    <!-- Center content -->
+    <h2>@Model.fileName</h2> <!-- Display filename -->
+    <img src="@Model.filePath" alt="Bill" style="width:500px; height:auto;" /> <!-- Image with fixed width and aspect ratio -->
+    <p>@Model.billDescription</p> <!-- Display full description -->
+</div>

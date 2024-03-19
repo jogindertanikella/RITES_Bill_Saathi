@@ -1,32 +1,563 @@
 ﻿using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using RITES_Bill_Saathi.Models;
+using Newtonsoft.Json;
+using RITES_Bill_Saathi.Helpers;
+using Parse;
+using System.Net;
+using LovePdf.Model.Task;
+using LovePdf.Core;
+using RestSharp;
 
 namespace RITES_Bill_Saathi.Controllers;
 
 public class HomeController : Controller
 {
-    private readonly ILogger<HomeController> _logger;
+    private static List<EmployeeDetails> listEmployeeDetails = new List<EmployeeDetails>();
 
-    public HomeController(ILogger<HomeController> logger)
+    private readonly IWebHostEnvironment Environment;
+
+    public HomeController(IWebHostEnvironment _environment)
     {
-        _logger = logger;
+
+        Environment = _environment;
+
+        ParseClient client = new ParseClient(Settings.back4app_id,
+            Settings.back4app_server_id,
+            Settings.back4app_dotnet_id);
+        client.Publicize();
+
     }
 
-    public IActionResult Index()
+    [HttpGet]
+    public async Task<IActionResult> Summary(string employeeId)
     {
+        if (string.IsNullOrWhiteSpace(employeeId))
+        {
+            return BadRequest("Employee ID is required.");
+        }
+
+
+        List<BillDetails> list_BillDetails = await Back4AppHelper.fnGetAllBillDetails(employeeId);
+
+    //   ViewBag.EmployeeSummary = await ReplicateHelper.fnGenerateSummary(list_billDetails);
+
+        ViewBag.EmployeeSummary = "";
+
         return View();
     }
+
+    public async Task<IActionResult> Bill(string objectId)
+    {
+        var bill = await Back4AppHelper.fnGetBillDetails(objectId); // Implement this method to retrieve bill details by objectId
+        return View(bill);
+    }
+
+    public async Task<IActionResult> BillsGallery(string employee_objectId)
+    {
+        // Call your modified function with the employeeId
+        var list_billDetails = await Back4AppHelper.fnGetAllBillDetails(employee_objectId);
+
+        // Pass employeeId to the view via ViewBag
+        ViewBag.Bill_Employee_ObjectId = employee_objectId;
+
+        for (int i=0; i<list_billDetails.Count;i++)
+        {
+            list_billDetails[i].generatingVisible = "hidden";
+            if (String.IsNullOrEmpty(list_billDetails[i].billDescription))
+                list_billDetails[i].generatingVisible = "visible";
+            if (String.IsNullOrWhiteSpace(list_billDetails[i].billDescription))
+                list_billDetails[i].generatingVisible = "visible";
+        }
+
+        // Pass the result to your ViewBills view
+        return View(list_billDetails);
+    }
+
+
+    [HttpPost]
+    public IActionResult CreateEmployee(EmployeeDetails employeeDetails)
+    {
+        Back4AppHelper.SaveEmployeeDetails_NewRecord(employeeDetails);
+        // Redirect to the Index action to display the updated list
+        return RedirectToAction("Index");
+    }
+
+    public async Task<IActionResult> Index()
+    {
+        //listEmployeeDetails = await Back4AppHelper.fnGetAllEmployeeDetails();
+        //return View(listEmployeeDetails);
+        return View();
+    }
+
+    public class Root_PDFAPI
+    {
+        public string url { get; set; }
+        public DateTime outputLinkValidTill { get; set; }
+        public bool error { get; set; }
+        public int status { get; set; }
+        public string name { get; set; }
+        public int credits { get; set; }
+        public int remainingCredits { get; set; }
+        public int duration { get; set; }
+    }
+
+
+    public async Task<string> UploadFilePDFAPI(string pdfFilePath)
+    {
+        var client = new RestClient("https://api.pdf.co/v1/file/upload");
+        //client.Timeout = -1;
+        var request = new RestRequest();
+        request.Method = Method.Post;
+        request.AddHeader("x-api-key", Settings.pdfcoAPI_key);
+        request.AddFile("file", pdfFilePath);
+        RestResponse response = await client.ExecuteAsync(request);
+
+        string result = response.Content;
+
+        Root_PDFAPI root_PDFAPI = JsonConvert.DeserializeObject<Root_PDFAPI>(result);
+
+        string uploadedfileurl = root_PDFAPI.url;
+
+
+        return uploadedfileurl; // This should be replaced with the actual file URL from the response
+    }
+
+    public class ConversionResult
+    {
+        public List<string> Urls { get; set; }
+        public string OutputLinkValidTill { get; set; }
+        public int PageCount { get; set; }
+        public bool Error { get; set; }
+        public int Status { get; set; }
+        public string Name { get; set; }
+        public int Credits { get; set; }
+        public int RemainingCredits { get; set; }
+        public int Duration { get; set; }
+    }
+
+    public async Task<ImageUrlResult> ConvertPdfToJpeg(string fileUrl, int pageNumber)
+    {
+        string customImageName = UniversalHelper.GenerateFileName("jpg");
+
+        var client = new RestClient("https://api.pdf.co/v1/pdf/convert/to/jpg");
+
+        var request = new RestRequest();
+        request.Method = Method.Post;
+        request.AddHeader("Content-Type", "application/json");
+        request.AddHeader("x-api-key", Settings.pdfcoAPI_key);
+
+        // Configure the request to convert only the specified page
+        string jsonRequestBody = $"{{\"url\":\"{fileUrl}\", \"pages\":\"{pageNumber - 1}\", \"async\": false, \"name\": \"{customImageName}\"}}";
+
+        request.AddParameter("application/json", jsonRequestBody, ParameterType.RequestBody);
+
+        RestResponse response = await client.ExecuteAsync(request);
+
+        string result = response.Content;
+
+        ConversionResult conversionResult = JsonConvert.DeserializeObject<ConversionResult>(result);
+
+        string imageUrlDefault = "https://accelracer.com/medicalbills/default.jpg";
+
+        string firstUrl = imageUrlDefault;
+
+        if (conversionResult.Urls != null && conversionResult.Urls.Count > 0)
+        {
+            firstUrl = conversionResult.Urls[0];
+        }
+
+
+        ImageUrlResult imageUrlResult = new ImageUrlResult();
+
+
+        imageUrlResult.imageUrl = firstUrl;
+        imageUrlResult.imageName = customImageName;
+
+        return imageUrlResult;
+    }
+
+    public class ImageUrlResult
+    {
+        public string imageUrl { get; set; }
+        public string imageName { get; set; }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UploadPDF(IFormFile pdfFile)
+    {
+        try
+        {
+            if (pdfFile != null && pdfFile.Length > 0)
+            {
+
+                // Save the uploaded PDF temporarily
+                var tempPdfPath = Path.Combine(Path.GetTempPath(), pdfFile.FileName);
+                using (var stream = new FileStream(tempPdfPath, FileMode.Create))
+                {
+                    await pdfFile.CopyToAsync(stream);
+                }
+
+                string pdfFilePath = tempPdfPath;
+
+                // Upload the PDF file and get the URL
+                string uploadedFileUrl = await UploadFilePDFAPI(pdfFilePath);
+
+                ImageUrlResult imageUrlResult = new ImageUrlResult();
+
+                // Convert the uploaded PDF to JPEG
+                if (!string.IsNullOrEmpty(uploadedFileUrl))
+                {
+             
+                    imageUrlResult = await ConvertPdfToJpeg(uploadedFileUrl, 1); // Assuming you want to convert the first page
+                }
+
+                string imageUrl = imageUrlResult.imageUrl;
+                string imageName = imageUrlResult.imageName;
+
+                    return Json(new { ImageUrl = imageUrl, ImageFileName = imageName });
+
+                }
+            // Return a default image URL if no file is uploaded
+            string imageUrlDefault = "https://accelracer.com/medicalbills/default.jpg";
+            return Json(new { ImageUrl = imageUrlDefault, ImageFileName = "default.jpg" });
+        }
+        catch (Exception ex)
+        {
+            // Return a default image URL in case of an exception
+            string imageUrlDefault = "https://accelracer.com/medicalbills/default.jpg";
+            return Json(new { ImageUrl = imageUrlDefault, ImageFileName = "default.jpg" });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UploadPDFPrevious1(IFormFile pdfFile)
+    {
+        try
+        {
+            if (pdfFile != null && pdfFile.Length > 0)
+            {
+                // Configuration for FTP upload (specify these values according to your FTP details)
+                string ftpHost = "ftp://accelracer.com";
+                string ftpFolderPath = "/public_html/medicalbills";
+                string ftpUsername = "admin@accelracer.com";
+                string ftpPassword = "YJ@[fKwrYIU6";
+                string newFileName = UniversalHelper.GenerateFileName("jpg");
+
+                // Save the uploaded PDF temporarily
+                var tempPdfPath = Path.Combine(Path.GetTempPath(), pdfFile.FileName);
+                using (var stream = new FileStream(tempPdfPath, FileMode.Create))
+                {
+                    await pdfFile.CopyToAsync(stream);
+                }
+
+                // Use IlovePdf to convert the first page of the PDF to an image
+
+                var lovePdfAPi = new LovePdfApi(Settings.ilovepdf_PublicKey, Settings.ilovepdf_SecretKey);
+
+                var task = lovePdfAPi.CreateTask<PdfToJpgTask>();
+                var file = task.AddFile(tempPdfPath);
+                var time = task.Process();
+                var resultByteArray = await task.DownloadFileAsByteArrayAsync(); // Get the converted file as byte array
+
+                // Convert the byte array to a stream
+                using (var resultStream = new MemoryStream(resultByteArray))
+                {
+                    // Set up FTP request
+                    string ftpFullPath = $"{ftpHost}{ftpFolderPath}/{newFileName}";
+                    FtpWebRequest request = (FtpWebRequest)WebRequest.Create(ftpFullPath);
+                    request.Method = WebRequestMethods.Ftp.UploadFile;
+                    request.Credentials = new NetworkCredential(ftpUsername, ftpPassword);
+                    request.UsePassive = true;
+                    request.UseBinary = true;
+                    request.KeepAlive = false;
+
+                    // Upload the stream to the FTP server
+                    using (Stream ftpStream = request.GetRequestStream())
+                    {
+                        await resultStream.CopyToAsync(ftpStream);
+                    }
+
+                    // Construct and return the URL for the uploaded image
+                    // Correctly construct the image URL without the /public_html part
+                    string imageUrlResult = $"{ftpHost.Replace("ftp://", "https://")}{ftpFolderPath}/{newFileName}";
+                    imageUrlResult = imageUrlResult.Replace("/public_html", "");
+                    return Json(new { ImageUrl = imageUrlResult, ImageFileName = newFileName });
+
+                }
+            }
+
+            // Return a default image URL if no file is uploaded
+            string imageUrlDefault = "https://accelracer.com/medicalbills/default.jpg";
+            return Json(new { ImageUrl = imageUrlDefault, ImageFileName = "default.jpg" });
+        }
+        catch (Exception ex)
+        {
+            // Return a default image URL in case of an exception
+            string imageUrlDefault = "https://accelracer.com/medicalbills/default.jpg";
+            return Json(new { ImageUrl = imageUrlDefault, ImageFileName = "default.jpg" });
+        }
+    }
+
+
 
     public IActionResult Privacy()
     {
         return View();
     }
 
+    public IActionResult DetailsImage()
+    {
+        DetailsImageViewModel detailsImageViewModel = new DetailsImageViewModel();
+
+        detailsImageViewModel.result = TempData["result"] as string;
+
+        return View(detailsImageViewModel);
+    }
+
+        public IActionResult Details()
+    {
+
+        string fileName = TempData["fileName"] as string;
+
+        if (string.IsNullOrEmpty(fileName))
+        {
+            // Handle the case where fileName is null or empty
+            // For example, return to another view or show an error message
+            return View("Error", new ErrorViewModel { ErrorMessage = "File name is not provided." });
+        }
+
+        // You can now use filePath directly in your view, or perform any processing before passing it to the view
+        // For example, you might want to pass just the file name or a model containing the file path
+
+
+        var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/uploads");
+
+        var filePath = Path.Combine(uploadsDir, fileName);
+
+        DetailsViewModel detailsViewModel = new DetailsViewModel();
+        detailsViewModel.FileName = fileName;
+        detailsViewModel.FilePath = filePath;
+
+
+        return View(detailsViewModel);
+    }
+
+
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error()
     {
         return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+    }
+
+    [HttpPost]
+    public async Task UploadFileLocalHost(IFormFile file)
+    {
+        try
+        {
+            //if (file == null || file.Length == 0)
+            //    return Content("File not selected");
+
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/uploads");
+
+            // Check if the uploads directory exists, if not, create it
+            if (!Directory.Exists(uploadsDir))
+            {
+                Directory.CreateDirectory(uploadsDir);
+            }
+
+            var filePath = Path.Combine(uploadsDir, file.FileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            filePath = @"https://accelracer.com/bills/bill1.jpg";
+
+            TempData["fileName"] = file.FileName;
+
+                //              RedirectToAction("Details");
+
+            //    string result = await   ReplicateHelper.fnDescribeBill(filePath);
+
+            //TempData["result"] = result;
+
+            RedirectToAction("DetailsImage");
+
+        }
+        catch (Exception ex)
+        {
+            TempData["fileName"] = file.FileName;
+
+                string result = file.FileName;
+
+                TempData["result"] = result;
+
+                RedirectToAction("DetailsImage");
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UploadFile(IFormFile file, string filename, string employeeObjectId)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return Content("File not selected");
+        }
+
+        string ftpHost = "ftp://accelracer.com";
+        string ftpFolderPath = $"/public_html/bills/{employeeObjectId}"; // Include employeeObjectId in the path
+        string ftpFullPath = $"{ftpHost}{ftpFolderPath}/{file.FileName}";
+        string ftpUsername = "admin@accelracer.com";
+        string ftpPassword = @"YJ@[fKwrYIU6";
+
+        try
+        {
+            // Check if the directory exists and create it if it doesn't
+            FtpWebRequest dirRequest = (FtpWebRequest)WebRequest.Create($"{ftpHost}{ftpFolderPath}");
+            dirRequest.Method = WebRequestMethods.Ftp.MakeDirectory;
+            dirRequest.Credentials = new NetworkCredential(ftpUsername, ftpPassword);
+            try
+            {
+                using (var resp = (FtpWebResponse)dirRequest.GetResponse())
+                {
+                    Console.WriteLine($"Directory created successfully. Status: {resp.StatusCode}");
+                }
+            }
+            catch (WebException ex)
+            {
+                var response = (FtpWebResponse)ex.Response;
+                if (response.StatusCode == FtpStatusCode.ActionNotTakenFileUnavailable)
+                {
+                    Console.WriteLine("Directory already exists.");
+                }
+                else
+                {
+                    Console.WriteLine("Directory some other issue.");
+                }
+            }
+
+            // Create FTP Request to upload the file
+            FtpWebRequest request = (FtpWebRequest)WebRequest.Create(ftpFullPath);
+            request.Method = WebRequestMethods.Ftp.UploadFile;
+            request.Credentials = new NetworkCredential(ftpUsername, ftpPassword);
+            request.UsePassive = true;
+            request.UseBinary = true;
+            request.KeepAlive = false;
+
+            using (Stream fileStream = file.OpenReadStream())
+            using (Stream ftpStream = request.GetRequestStream())
+            {
+                await fileStream.CopyToAsync(ftpStream);
+            }
+
+            // The file path returned is the FTP path where the file is accessible.
+            // Adjusted to reflect the new directory structure
+            string filePath = ftpFullPath.Replace("ftp://", "https://").Replace("/public_html", "");
+
+            BillDetails billDetails = new BillDetails
+            {
+                employee_objectId = employeeObjectId,
+                fileName = filename,
+                filePath = filePath
+            };
+
+            string bill_objectId = await Back4AppHelper.SaveBillDetails_NewRecord(billDetails);
+
+            string result = await ReplicateHelper.fnDescribeBill_Llava(filePath, bill_objectId);
+
+            TempData["polling_id"] = bill_objectId;
+
+            // Updated line to include employeeObjectId as employeeId parameter
+            return RedirectToAction("BillsGallery", new { employee_objectId = employeeObjectId, refresh = Guid.NewGuid().ToString() });
+
+        }
+        catch (Exception ex)
+        {
+            Back4AppHelper.SaveException(ex);
+            // Updated line to include employeeObjectId as employeeId parameter
+            return RedirectToAction("BillsGallery", new { employee_objectId = employeeObjectId, refresh = Guid.NewGuid().ToString() });
+
+        }
+    }
+
+    public class UploadedImageDetails
+    {
+        public string imagefilePath { get; set; }
+        public string imagefileName { get; set; }
+    }
+
+
+    [HttpPost]
+    public async Task<string> ProcessUploadedImage(UploadedImageDetails file)
+    {
+        try
+        { 
+        string imagefilePath = file.imagefilePath;
+            string imagefileName = file.imagefileName;
+            BillDetails billDetails = new BillDetails
+            {
+                fileName = imagefileName,
+            filePath = imagefilePath
+        };
+
+        string bill_objectId = await Back4AppHelper.SaveSimpleBillDetails_NewRecord(billDetails);
+
+        string result = await ReplicateHelper.fnDescribeBill_Llava(imagefilePath, bill_objectId);
+
+        string polling_id = bill_objectId;
+
+        return polling_id;
+
+    }
+        catch (Exception ex)
+        {
+            Back4AppHelper.SaveException(ex);
+            // Updated line to include employeeObjectId as employeeId parameter
+            string polling_id = "";
+
+            return polling_id;
+
+        }
+    }
+
+    public async Task<IActionResult> CheckDescription(string objectId)
+    {
+        if (string.IsNullOrEmpty(objectId))
+        {
+            return Json(new { success = false, message = "Object ID is required." });
+          
+        }
+
+        try
+        {
+            // Call your helper function to get the bill description
+            string description = await Back4AppHelper.fnGetBillDescription(objectId);
+
+            if (description != null)
+            {
+                // If a description was found, return it
+                return Json(new { success = true, description = description });
+            }
+            else
+            {
+                // No description found for the given objectId
+                return Json(new { success = false, message = "No description found." });
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log the exception as needed
+            Console.WriteLine(ex.Message); // Adjust logging as necessary
+
+            // Return an error message
+            return Json(new { success = false, message = "An error occurred while fetching the description." });
+        }
     }
 }
 

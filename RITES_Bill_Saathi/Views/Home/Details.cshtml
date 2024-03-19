@@ -1,0 +1,60 @@
+﻿@model RITES_Bill_Saathi.Models.DetailsViewModel
+
+@{
+    ViewData["Title"] = "Bill Details";
+}
+
+<h2>Bill Details</h2>
+
+@*<div>
+    <p>File Path: @Model.filePath</p>
+    <p>File Name: @Model.fileName</p>
+    <p>File Encoding: @Model.FileEncoding</p>
+    <p>Application Version: @Model.ApplicationVersion</p>
+    <p>Drawing Size: @Model.Width x @Model.Height</p>
+</div>
+
+@if (Model.layerNames != null && Model.layerNames.Count > 0)
+{
+    <h3>Layers</h3>
+    <ul>
+        @foreach (var name in Model.layerNames)
+        {
+            <li>@name</li>
+        }
+    </ul>
+}
+else
+{
+    <p>No layers found.</p>
+}
+
+@if (Model.entityNames != null && Model.entityNames.Count > 0)
+{
+    <h3>Entities</h3>
+    <ul>
+        @foreach (var entity in Model.entityNames)
+        {
+            <li>@entity</li>
+        }
+    </ul>
+}
+else
+{
+    <p>No entities found.</p>
+}
+
+@if (Model.layoutNames != null && Model.layoutNames.Count > 0)
+{
+    <h3>Layouts</h3>
+    <ul>
+        @foreach (var layout in Model.layoutNames)
+        {
+            <li>@layout</li>
+        }
+    </ul>
+}
+else
+{
+    <p>No layouts found.</p>
+}*@

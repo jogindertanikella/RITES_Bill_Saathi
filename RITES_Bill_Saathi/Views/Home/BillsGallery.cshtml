@@ -1,0 +1,200 @@
+﻿@model List<BillDetails>
+
+
+<input type="hidden" id="input_employee_objectId" value="@ViewBag.Bill_Employee_ObjectId" />
+
+
+<div class="container text-center">
+    <div class="row justify-content-center">
+        <div class="col-12">
+            <h2>Bills Gallery</h2>
+        </div>
+        <div class="col-auto">
+            <form id="upload-form" enctype="multipart/form-data" class="my-3">
+                <div class="input-group mb-3">
+                    <input type="file" id="file-upload" name="file" class="form-control" />
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                </div>
+            </form>
+
+        </div>
+        <div class="col-12">
+            <div id="upload-progress" class="progress" style="display:none; height: 20px;">
+                <div id="file-progress" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container text-center" style="margin-top:30px" id="container-images">
+    <div class="col-12 row justify-content-center">
+        <div id="masonry-grid" class="masonry-grid col-4" style="overflow-y: scroll; height: 500px;">
+            @foreach (var bill in Model)
+            {
+                <div class="grid-item" style="margin-top:3px;">
+                    <div class="text-container">
+                        <!-- Filename on top -->
+                        <p class="classfilename">@bill.fileName</p>
+                    </div>
+                    <!-- Image follows -->
+                    <img data-object-id="@bill.objectId" class="mainImage" src="@bill.filePath" alt="Bill" />
+                    <div class="text-container">
+                        <!-- Description below the image -->
+                        <p class="classdescription">@(string.IsNullOrEmpty(bill.billDescription) ? "" : (bill.billDescription.Length > 30 ? bill.billDescription.Substring(0, 30) + "..." : bill.billDescription))</p>
+                    </div>
+                    <img class="generatingImage" id="generating_@bill.objectId" src="~/img/generating.gif" style="visibility:@bill.generatingVisible;" />
+                    <!-- Hidden field for the objectId -->
+                    <input type="hidden" name="objectId" value="@bill.objectId" />
+                </div>
+
+
+            }
+        </div>
+        <div id="selected-image" class="col-4">
+            <!-- Selected image will be displayed here -->
+        </div>
+        <div id="image-description" class="col-4">
+            <!-- Updated description will be displayed here -->
+        </div>
+    </div>
+</div>
+
+
+
+@section Scripts {
+    <script>
+
+        if (window.location.href.indexOf('refresh') > -1) {
+            window.location.reload(true); // Force reload bypassing the cache
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            console.log("started");
+            // Call updateDescriptions every 3 minutes
+            setInterval(updateDescriptions, 180000); // 180000 milliseconds = 3 minutes
+
+            var elem = document.querySelector('.masonry-grid');
+            var msnry = new Masonry(elem, {
+                itemSelector: '.grid-item',
+                percentPosition: true
+            });
+        });
+
+
+
+        // Handle the form submission
+$('#upload-form').submit(function (e) {
+    e.preventDefault();
+    var formData = new FormData(this);
+    var fileInput = document.getElementById('file-upload');
+
+    if (fileInput.files.length > 0) {
+        var file = fileInput.files[0];
+        formData.append('file', file);
+        formData.append('filename', file.name); // This line sends the filename
+
+        var employee_objectId = $('#input_employee_objectId').val();
+        formData.append('employeeObjectId', employee_objectId);
+
+        $.ajax({
+            url: '@Url.Action("UploadFile", "Home")', // Ensure correct URL and controller name
+            type: 'POST',
+            data: formData,
+            processData: false, // Tell jQuery not to process the data
+            contentType: false, // Tell jQuery not to set contentType
+            xhr: function () {
+                var xhr = new window.XMLHttpRequest();
+                xhr.upload.addEventListener("progress", function (evt) {
+                    if (evt.lengthComputable) {
+                        var percentComplete = evt.loaded / evt.total * 100;
+                        $('#upload-progress').css('display', 'block');
+                        $('#file-progress').css('width', percentComplete + '%');
+                        $('#file-progress').attr('aria-valuenow', percentComplete);
+                        $('#file-progress').text(percentComplete + '%'); // Optional: Display the percentage on the progress bar
+                    }
+                }, false);
+                return xhr;
+            },
+            success: function (response) {
+                $('#upload-progress').css('display', 'none');
+                // Optionally reset progress bar to 0%
+                $('#file-progress').css('width', '0%');
+                $('#file-progress').attr('aria-valuenow', 0);
+                $('#file-progress').text('0%'); // Reset the text if you are displaying percentage
+                // Refresh the masonry grid or notify the user of success
+            },
+            error: function (response) {
+                $('#upload-progress').css('display', 'none');
+                // Optionally reset progress bar to 0%
+                $('#file-progress').css('width', '0%');
+                $('#file-progress').attr('aria-valuenow', 0);
+                $('#file-progress').text('0%'); // Reset the text if displaying percentage
+                // Handle error
+            }
+        });
+    }
+});
+
+
+        function updateDescriptions() {
+            try {
+                $('.grid-item').each(function () {
+                    var objectId = $(this).find('input[name="objectId"]').val();
+                    var descriptionElement = $(this).find('p');
+                    var imgid = "generating_" + objectId;
+
+                    console.log(imgid + " - " + document.getElementById(imgid).style.visibility);
+                    if (!descriptionElement.text().trim()) {
+                        document.getElementById(imgid).style.visibility = "visible";
+                        // Only poll if the current description is empty
+                        $.ajax({
+                            url: '/Home/CheckDescription', // Update with your actual endpoint
+                            type: 'GET',
+                            data: { objectId: objectId },
+                            success: function (data) {
+                                if (data && data.description) {
+                                    var updatedDescription = data.description.length > 30 ? data.description.substring(0, 30) + "..." : data.description;
+                                    descriptionElement.text(updatedDescription);
+
+                                    document.getElementById(imgid).style.visibility = "hidden";
+                                }
+                            },
+                            error: function (xhr, status, error) {
+                                document.getElementById(imgid).style.visibility = "visible";
+                                console.error("Error checking for description updates:", error);
+                            }
+                        });
+                    }
+                });
+            }
+            catch (err) {
+                console.log(err);   }
+        }
+
+        document.querySelectorAll('.mainImage').forEach(item => {
+            item.addEventListener('click', event => {
+                const objectId = event.target.getAttribute('data-object-id');
+                const src = event.target.getAttribute('src');
+
+                // Attempt to find the parent container of the clicked image
+                const parentContainer = event.target.closest('.grid-item');
+                if (parentContainer) {
+                    // Try to find the description within the same grid item
+                    const descriptionElement = parentContainer.querySelector('.classdescription');
+                    const description = descriptionElement ? descriptionElement.textContent : 'No description available';
+
+                    // Update second column with the selected image
+                    document.getElementById('selected-image').innerHTML = `<img src="${src}" class="img-fluid" alt="Selected Bill">`;
+
+                    // Update third column with the description
+                    document.getElementById('image-description').textContent = description;
+                } else {
+                    console.error('Could not find the parent container for the image.');
+                }
+            });
+        });
+
+
+
+    </script>
+}

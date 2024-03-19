@@ -1,0 +1,22 @@
+﻿@model List<ChatMessage>
+
+@{
+    ViewData["Title"] = "Llama2 Chat";
+}
+
+<h2>Llama2 Chat</h2>
+
+
+<form asp-action="SendMessage" method="post">
+    <input type="text" name="message" />
+    <button type="submit">Send</button>
+</form>
+
+<div id="txtChatView">
+    @foreach (var message in Model)
+    {
+        <div class="message @(message.User == "User" ? "user-message" : "bot-message")">
+            <span>@message.Timestamp.ToString("HH:mm:ss") [@message.User]: @message.Message</span><br />
+        </div>
+    }
+</div>

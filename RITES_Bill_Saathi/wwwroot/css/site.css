@@ -16,3 +16,54 @@ html {
 body {
   margin-bottom: 60px;
 }
+
+.masonry-grid {
+    column-count: 4;
+    column-gap: 16px;
+    margin: 0 auto;
+    width: 90%;
+}
+
+.grid-item {
+    break-inside: avoid;
+    margin-bottom: 16px;
+}
+
+.mainImage, .generatingImage {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.mainImage {
+    width: 240px;
+    height: auto;
+    object-fit: cover;
+    margin-top: 8px; /* Adjusted to add space between the filename and the image */
+}
+
+.generatingImage {
+    width: 50px;
+    height: 50px;
+}
+
+.text-container {
+    max-width: 240px;
+    word-wrap: break-word;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center; /* Center the text if desired */
+}
+
+.classfilename, .classdescription {
+    width: 100%;
+}
+
+.classfilename {
+    font-size: small;
+    margin-bottom: 4px; /* Add a little space above the image */
+}
+
+.classdescription {
+    font-size: x-small;
+}

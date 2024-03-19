@@ -1,0 +1,89 @@
+﻿    [HttpPost]
+    public async Task<IActionResult> UploadPDFPrevious(IFormFile pdfFile)
+    {
+        try
+        {
+            if (pdfFile != null && pdfFile.Length > 0)
+            {
+                // Configuration for FTP upload
+                string ftpHost = "ftp://accelracer.com";
+                string ftpFolderPathImages = "/public_html/medicalbills";
+                string ftpFolderPathPDFs = "/public_html/PDFmedicalbills";
+                string ftpUsername = "admin@accelracer.com";
+                string ftpPassword = @"YJ@[fKwrYIU6";
+                string newfilename = UniversalHelper.GenerateFileName("jpg");
+                string pdfFileName = UniversalHelper.GenerateFileName("pdf");
+
+                // Save the uploaded PDF temporarily
+                var tempPdfPath = Path.Combine(Path.GetTempPath(), pdfFile.FileName);
+                using (var stream = new FileStream(tempPdfPath, FileMode.Create))
+                {
+                    await pdfFile.CopyToAsync(stream);
+                }
+
+                // First, upload the PDF to FTP
+                string ftpFullPDFPath = $"{ftpHost}{ftpFolderPathPDFs}/{pdfFileName}";
+                FtpWebRequest pdfRequest = (FtpWebRequest)WebRequest.Create(ftpFullPDFPath);
+                pdfRequest.Method = WebRequestMethods.Ftp.UploadFile;
+                pdfRequest.Credentials = new NetworkCredential(ftpUsername, ftpPassword);
+                pdfRequest.UsePassive = true;
+                pdfRequest.UseBinary = true;
+                pdfRequest.KeepAlive = false;
+
+                using (Stream fileStream = new FileStream(tempPdfPath, FileMode.Open))
+                using (Stream ftpStream = pdfRequest.GetRequestStream())
+                {
+                    await fileStream.CopyToAsync(ftpStream);
+                }
+
+                // Initialize Aspose.Pdf Document object
+                var document = new Aspose.Pdf.Document(tempPdfPath);
+
+                // Define the output directory and make sure it exists
+                var outputDir = Path.Combine(Path.GetTempPath(), "ConvertedImages");
+                Directory.CreateDirectory(outputDir);
+
+                var pageFilePath = Path.Combine(outputDir, newfilename);
+                using (var imageStream = new FileStream(pageFilePath, FileMode.Create))
+                {
+                    // Convert PDF page to JPG
+                    var jpegDevice = new Aspose.Pdf.Devices.JpegDevice(new Aspose.Pdf.Devices.Resolution(300), 100);
+                    jpegDevice.Process(document.Pages[1], imageStream); // Pages are 1-indexed
+                }
+
+                // Then, upload the image to FTP
+                string ftpFullImagePath = $"{ftpHost}{ftpFolderPathImages}/{newfilename}";
+                FtpWebRequest imageRequest = (FtpWebRequest)WebRequest.Create(ftpFullImagePath);
+                imageRequest.Method = WebRequestMethods.Ftp.UploadFile;
+                imageRequest.Credentials = new NetworkCredential(ftpUsername, ftpPassword);
+                imageRequest.UsePassive = true;
+                imageRequest.UseBinary = true;
+                imageRequest.KeepAlive = false;
+
+                using (Stream fileStream = new FileStream(pageFilePath, FileMode.Open))
+                using (Stream ftpStream = imageRequest.GetRequestStream())
+                {
+                    await fileStream.CopyToAsync(ftpStream);
+                }
+
+                // Optional: Delete the local image file and PDF after upload
+                System.IO.File.Delete(pageFilePath);
+                System.IO.File.Delete(tempPdfPath);
+
+                // Return the URL of the image
+                string imageUrl = ftpFullImagePath.Replace("ftp://", "https://").Replace("/public_html", "");
+                return Json(new { ImageUrl = imageUrl });
+            }
+
+            //      return BadRequest("No file uploaded.");
+
+            string defaultImageUrl = @"https://accelracer.com/medicalbills/default.jpg";
+            return Json(new { ImageUrl = defaultImageUrl});
+        }
+        catch (Exception ex)
+        {
+            // In case of an exception, return a default image URL
+            string defaultImageUrl = @"https://accelracer.com/medicalbills/default.jpg";
+            return Json(new { ImageUrl = defaultImageUrl, Error = ex.Message });
+        }
+    }
