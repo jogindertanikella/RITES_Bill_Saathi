@@ -162,49 +162,85 @@
 
         tryCounter = 0;
 
+        // Modify the uploadFile function to use showModal and hideModal
         function uploadFile(formData) {
             showModal(); // Show the modal spinner when the upload starts
             $.ajax({
-                url: '/Home/UploadPDFAndConvertAllPages',
+                url: '/Home/UploadPDF',
                 type: 'POST',
                 data: formData,
                 processData: false,
                 contentType: false,
+                xhr: function () {
+                    var xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener("progress", function (evt) {
+                        if (evt.lengthComputable) {
+                            var percentComplete = evt.loaded / evt.total;
+                            percentComplete = parseInt(percentComplete * 100);
+                            $('.progress').show();
+                            document.getElementById("progressbarmain").style.display = "block";
+                            $('.progress-bar').width(percentComplete + '%').attr('aria-valuenow', percentComplete);
+                            $('.progress-bar').text(percentComplete + '%');
+                        }
+                    }, false);
+                    return xhr;
+                },
                 success: function (data) {
                     console.log(data);
-                    hideModal(); // Hide the modal spinner after receiving the data
-                    var imagesContainer = document.querySelector('.left-pane');
-                    imagesContainer.innerHTML = ''; // Clear the existing content
+                    $('.progress').hide();
+                    $('.progress-bar').width('0%').attr('aria-valuenow', 0);
+                    document.getElementById("progressbarmain").style.display = "none";
+                    $('#convertedImg').attr('src', data.imageUrl).on('load', function () {
 
-                    document.getElementById("descriptionStatus").innerText = "PDF file successfully processed. Now analysing..";
+                        document.getElementById("uploadForm").style.display = "none";
+                        // Hide the modal spinner when the image has loaded
+                        hideModal();
 
-                    // Process each image URL individually
-                    data.imageUrls.forEach(function (imageUrl) {
-                        var img = document.createElement('img');
-                        img.classList.add('image-border');
-                        img.src = imageUrl;
-                        img.style.display = 'block';
-                        img.style.maxWidth = '100%';
-                        imagesContainer.appendChild(img);
+                        // Show the converted image
+                        $(this).show();
+                        // Update input fields with new file path and name
+                        document.getElementById("input_newfilepath").value = data.imageUrl;
+                        document.getElementById("input_newfilename").value = data.imageFileName;
 
-                        // Immediately handle each image's upload and analysis
-                        uploadImage(imageUrl).then(function (description) {
-                            // Append the description as soon as it's available
-                            document.getElementById("descriptionText").innerText += description + "\n";
-                            document.getElementById("descriptionSpinner").style.display = "none";
-                            document.getElementById("searchingSpinner").style.display = "none";
-                            hideModal(); // Also hide the modal on error
-                        }).catch(function (error) {
-                            console.log(error);
-                            document.getElementById("descriptionStatus").innerText = "";
-                            var updatedDescription = "We could not retrieve the description. Please contact support.";
-                            document.getElementById("descriptionSpinner").style.display = "none";
-                            document.getElementById("searchingSpinner").style.display = "none";
-                            hideModal(); // Also hide the modal on error
+                        // Update status text
+                        document.getElementById("descriptionStatus").innerText = "PDF file successfully processed. Now analysing..";
+
+                        document.getElementById("spinnerText").innerText = "Analyzing..";
+
+                        document.getElementById("descriptionStatus").innerText = "Waiting for Analysis results..";
+                        document.getElementById("descriptionSpinner").style.display = "block";
+                        document.getElementById("searchingSpinner").style.display = "none";
+                        showModal();
+                        // Make a second AJAX request to process the uploaded image
+                        $.ajax({
+                            url: '/Home/ProcessUploadedImage', // Update with your actual endpoint
+                            type: 'POST',
+                            data: {
+                                imagefilePath: document.getElementById("input_newfilepath").value,
+                                imagefileName: document.getElementById("input_newfilename").value
+                            },
+                            success: function (data) {
+                                console.log(data);
+                                document.getElementById("descriptionStatus").innerText = "Analysis completed..";
+                                document.getElementById("descriptionText").innerText = data;
+                                document.getElementById("descriptionSpinner").style.display = "none";
+                                document.getElementById("searchingSpinner").style.display = "none";
+                                hideModal();
+
+                            },
+                            error: function (xhr, status, error) {
+                                console.log(error);
+                                document.getElementById("descriptionStatus").innerText = "";
+                                var updatedDescription = "We could not retrieve the description. Please contact support.";
+                                document.getElementById("descriptionSpinner").style.display = "none";
+                                document.getElementById("searchingSpinner").style.display = "none";
+                                hideModal(); // Also hide the modal on error
+
+                            }
                         });
                     });
                 },
-                error: function (xhr, status, error) {
+                error: function () {
                     console.log(error);
                     document.getElementById("descriptionStatus").innerText = "";
                     var updatedDescription = "We could not retrieve the description. Please contact support.";
@@ -216,34 +252,6 @@
         }
 
 
-        function uploadImage(imageUrl) {
-            return new Promise((resolve, reject) => {
-                document.getElementById("spinnerText").innerText = "Analyzing..";
 
-                document.getElementById("descriptionStatus").innerText = "Waiting for Analysis results..";
-                document.getElementById("descriptionSpinner").style.display = "block";
-                document.getElementById("searchingSpinner").style.display = "none";
-                showModal();
-                $.ajax({
-                    url: '/Home/ProcessUploadedImage',
-                    type: 'POST',
-                    data: {
-                        imagefilePath: imageUrl,
-                        // Assume imagefileName is either part of imageUrl or not needed; adjust as necessary
-                    },
-                    success: function (data) {
-                        document.getElementById("descriptionSpinner").style.display = "none";
-                        document.getElementById("searchingSpinner").style.display = "none";
-                        hideModal(); // Also hide the modal on error
-                        resolve(data); // Resolve the promise with the data
-                    },
-                    error: function (xhr, status, error) {
-                        document.getElementById("descriptionSpinner").style.display = "none";
-                        document.getElementById("searchingSpinner").style.display = "none";
-                        hideModal(); // Also hide the modal on error
-                        reject(error); // Reject the promise on error
-                    }
-                });
-            });
-        }</script>
+    </script>
 }

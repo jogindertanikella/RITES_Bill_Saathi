@@ -87,3 +87,131 @@
             return Json(new { ImageUrl = defaultImageUrl, Error = ex.Message });
         }
     }
+
+
+
+//Local Directory - 25th March 2024
+    [HttpPost]
+    public async Task<IActionResult> UploadFile(IFormFile pdfFile)
+    {
+        try
+        { 
+        if (pdfFile == null || pdfFile.Length == 0)
+        {
+            return BadRequest("No file uploaded.");
+        }
+
+        var pdfFileName = Path.GetFileNameWithoutExtension(pdfFile.FileName);
+        var workingDirectory = Path.Combine(Directory.GetCurrentDirectory(), pdfFileName);
+
+        // Create a new directory for the uploaded PDF if it doesn't already exist
+        if (!Directory.Exists(workingDirectory))
+        {
+            Directory.CreateDirectory(workingDirectory);
+        }
+
+        var pdfFilePath = Path.Combine(workingDirectory, pdfFile.FileName);
+
+        // Save the PDF file to the newly created directory
+        using (var stream = new FileStream(pdfFilePath, FileMode.Create))
+        {
+            await pdfFile.CopyToAsync(stream);
+        }
+
+        // Convert PDF to images
+        List<string> imagePaths = await AsposePdfConverter.ConvertPdfToImages(new FileStream(pdfFilePath, FileMode.Open, FileAccess.Read), pdfFile.FileName, workingDirectory);
+
+        return Ok(new { ImageUrls = imagePaths });
+        }
+        catch (Exception ex)
+        {
+            List<string> imagePaths = new List<string>();
+
+            return Ok(new { ImageUrls = imagePaths });
+        }
+    }
+
+
+        // Modify the uploadFile function to handle multiple images and wait for all promises to resolve
+        function uploadFile(formData) {
+            showModal(); // Show the modal spinner when the upload starts
+            $.ajax({
+                url: '/Home/UploadPDFAndConvertAllPages',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (data) {
+                    console.log(data);
+                    hideModal(); // Hide the modal spinner after receiving the data
+                    var imagesContainer = document.querySelector('.left-pane');
+                    imagesContainer.innerHTML = ''; // Clear the existing content
+
+                    // Create an array of promises for each image upload
+                    var uploadPromises = data.imageUrls.map(function (imageUrl) {
+                        // Display each image in the left-pane
+                        var img = document.createElement('img');
+                        img.classList.add('image-border');
+                        img.src = imageUrl;
+                        img.style.display = 'block';
+                        img.style.maxWidth = '100%';
+                        imagesContainer.appendChild(img);
+
+                        return uploadImage(imageUrl); // Return the promise
+                    });
+
+                    // Update status text
+                    document.getElementById("descriptionStatus").innerText = "PDF file successfully processed. Now analysing..";
+
+                    document.getElementById("spinnerText").innerText = "Analyzing..";
+
+                    document.getElementById("descriptionStatus").innerText = "Waiting for Analysis results..";
+                    document.getElementById("descriptionSpinner").style.display = "block";
+                    document.getElementById("searchingSpinner").style.display = "none";
+                    showModal();
+
+                    // Wait for all images to be processed
+                    Promise.all(uploadPromises).then(function (descriptions) {
+                        // All images have been processed, update the description text
+                        document.getElementById("descriptionStatus").innerText = "PDF file successfully processed. Now analysing..";
+                        descriptions.forEach(function (description) {
+                            document.getElementById("descriptionText").innerText += description + "\n";
+                        });
+                    }).catch(function (error) {
+                        console.error("An error occurred while processing images:", error);
+                        document.getElementById("descriptionStatus").innerText = "An error occurred. Please try again.";
+                    });
+                },
+                error: function (xhr, status, error) {
+                    console.error("Upload failed:", error);
+                    hideModal(); // Also hide the modal on error
+                    document.getElementById("descriptionStatus").innerText = "Upload failed. Please try again.";
+                }
+            });
+        }
+
+        function uploadImage(imageUrl) {
+            return new Promise((resolve, reject) => {
+                showModal();
+                $.ajax({
+                    url: '/Home/ProcessUploadedImage',
+                    type: 'POST',
+                    data: {
+                        imagefilePath: imageUrl,
+                        // Assume imagefileName is either part of imageUrl or not needed; adjust as necessary
+                    },
+                    success: function (data) {
+                        document.getElementById("descriptionSpinner").style.display = "none";
+                        document.getElementById("searchingSpinner").style.display = "none";
+                        hideModal(); // Also hide the modal on error
+                        resolve(data); // Resolve the promise with the data
+                    },
+                    error: function (xhr, status, error) {
+                        document.getElementById("descriptionSpinner").style.display = "none";
+                        document.getElementById("searchingSpinner").style.display = "none";
+                        hideModal(); // Also hide the modal on error
+                        reject(error); // Reject the promise on error
+                    }
+                });
+            });
+        }

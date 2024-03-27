@@ -1,0 +1,320 @@
+﻿
+@section Styles {
+    <style>
+        .split-pane {
+            height: 100vh;
+            display: flex;
+        }
+
+        .left-pane {
+            flex: 1;
+            border-right: 2px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            justify-content: start;
+            flex-direction: column; /* Ensure vertical alignment for inner elements */
+            padding-right: 6px;
+        }
+
+        .right-pane {
+            flex: 1;
+            padding: 20px;
+        }
+
+        .drag-area {
+            border: 2px dashed #dee2e6;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .image-border {
+            border: 4px solid #2c3e50; /* Solid border with a dark shade */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1), /* Outer shadow */
+            0 4px 20px rgba(0, 0, 0, 0.1); /* Inner depth */
+            max-width: 100%;
+            display: block; /* Adjust display to block to make sure the box-shadow is visible */
+            padding: 3px;
+        }
+
+        .custom-modal-content {
+            background: rgba(255, 255, 255, 0.85); /* Make the background slightly opaque */
+            border: 1px solid #999; /* Add a subtle border */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), /* Outer shadow for depth */
+            0 6px 20px rgba(0, 0, 0, 0.19); /* Inner shadow for emphasis */
+            border-radius: 8px; /* Optional: adds rounded corners to the modal */
+        }
+    </style>
+}
+
+<input type="hidden" id="input_newfilepath" />
+<input type="hidden" id="input_newfilename" />
+
+<input type="hidden" id="input_pollingid" />
+
+<div class="split-pane">
+    <div class="left-pane">
+        <form action="/Home/UploadPDF" method="post" enctype="multipart/form-data" id="uploadForm">
+            <!-- Moved file input to the top -->
+            <div class="input-group mb-3">
+                <input type="file" id="fileupload" name="pdfFile" class="form-control" hidden />
+                <div id="drop-zone" style="border: 2px dashed #007bff; padding: 20px; text-align: center; cursor: pointer;">
+                    Drop your PDF here or click to upload.
+                </div>
+                <button id="btnsubmit" type="submit" class="btn btn-primary">Upload</button>
+            </div>
+        </form>
+        <!-- File Name Display -->
+        <p id="fileNameDisplay" style="text-align: center; margin-top: 20px; display: none;">No file selected</p>
+        <div class="progress" style="width: 90%; margin-top: 20px; display: none;">
+            <div id="progressbarmain" class="progress-bar" role="progressbar" style="width: 0%;display:none;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <img class="image-border" id="convertedImg" style="max-width: 100%;display:none;">
+    </div>
+    <div class="right-pane">
+        <p id="descriptionStatus" style="margin:10px;">Upload the PDF file to get started..</p>
+        <br />
+        <img id="descriptionSpinner" style="display:none;" src="~/img/1minute.gif" />
+        <img id="searchingSpinner" style="display:none;" src="~/img/searching.gif" />
+
+        <br />     <p id="descriptionText"></p>
+    </div>
+</div>
+
+<!-- Modal Spinner -->
+<div id="loadingModal" class="modal" tabindex="-1" role="dialog" style="display:none; position: fixed; z-index: 1050; top: 0; left: 0; height: 100vh; width: 100vw; background: rgba(0, 0, 0, 0.6);">
+    <!-- Slightly increased the opacity of the background -->
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content custom-modal-content">
+            <!-- Applied the custom class here -->
+            <div class="modal-body" style="text-align: center;">
+                <span style="margin:10px;" id="spinnerText">Processing...</span>
+                <img class="generatingImage" src="~/img/generating.gif" />
+                @*<div class="spinner-border text-light" role="status">
+                        <span class="sr-only" id="spinnerText">Processing...</span>
+                    </div>*@
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <script>// Show modal function
+        function showModal() {
+            $('#loadingModal').show();
+        }
+
+        // Hide modal function
+        function hideModal() {
+            $('#loadingModal').hide();
+        }
+
+        //document.addEventListener("DOMContentLoaded", function () {
+        //    console.log("started");
+        //    // Call updateDescription every 3 minutes
+        //    setInterval(updateDescription, 180000); // 180000 milliseconds = 3 minutes
+        //});
+
+        $(document).ready(function () {
+            var dropZone = document.getElementById('drop-zone');
+            var fileInput = document.getElementById('fileupload');
+            var uploadForm = document.getElementById('uploadForm');
+            var fileNameDisplay = document.getElementById('fileNameDisplay'); // Get the file name display element
+
+            dropZone.addEventListener('click', function () {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', function () {
+                // Show file name when selected using the file dialog
+                if (fileInput.files.length > 0) {
+                    fileNameDisplay.textContent = fileInput.files[0].name; // Set the file name
+                    fileNameDisplay.style.display = 'block'; // Show the file name display
+                }
+            });
+
+            dropZone.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                dropZone.style.backgroundColor = '#f0f0f0';
+            });
+
+            dropZone.addEventListener('dragleave', function (e) {
+                e.preventDefault();
+                dropZone.style.backgroundColor = '';
+            });
+
+            dropZone.addEventListener('drop', function (e) {
+                e.preventDefault();
+                dropZone.style.backgroundColor = '';
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                    // Show file name on drop
+                    fileNameDisplay.textContent = e.dataTransfer.files[0].name; // Set the file name
+                    fileNameDisplay.style.display = 'block'; // Show the file name display
+
+                    // Create a new FormData object and append the file
+                    var formData = new FormData();
+                    formData.append('pdfFile', e.dataTransfer.files[0]);
+                    uploadFile(formData);
+                }
+            });
+        });
+
+        tryCounter = 0;
+
+        // Modify the uploadFile function to use showModal and hideModal
+        function uploadFile(formData) {
+            showModal(); // Show the modal spinner when the upload starts
+            $.ajax({
+                url: '/Home/UploadPDF',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhr: function () {
+                    var xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener("progress", function (evt) {
+                        if (evt.lengthComputable) {
+                            var percentComplete = evt.loaded / evt.total;
+                            percentComplete = parseInt(percentComplete * 100);
+                            $('.progress').show();
+                            document.getElementById("progressbarmain").style.display = "block";
+                            $('.progress-bar').width(percentComplete + '%').attr('aria-valuenow', percentComplete);
+                            $('.progress-bar').text(percentComplete + '%');
+                        }
+                    }, false);
+                    return xhr;
+                },
+                success: function (data) {
+                    console.log(data);
+                    $('.progress').hide();
+                    $('.progress-bar').width('0%').attr('aria-valuenow', 0);
+                    document.getElementById("progressbarmain").style.display = "none";
+                    $('#convertedImg').attr('src', data.imageUrl).on('load', function () {
+
+                        document.getElementById("uploadForm").style.display = "none";
+                        // Hide the modal spinner when the image has loaded
+                        hideModal();
+
+                        // Show the converted image
+                        $(this).show();
+                        // Update input fields with new file path and name
+                        document.getElementById("input_newfilepath").value = data.imageUrl;
+                        document.getElementById("input_newfilename").value = data.imageFileName;
+
+                        // Update spinner text and show modal for the next operation
+                        document.getElementById("spinnerText").innerText = "Saving..";
+                        showModal();
+
+                        // Update status text
+                        document.getElementById("descriptionStatus").innerText = "PDF file successfully processed. Now analysing..";
+
+                        // Make a second AJAX request to process the uploaded image
+                        $.ajax({
+                            url: '/Home/ProcessUploadedImage', // Update with your actual endpoint
+                            type: 'POST',
+                            data: {
+                                imagefilePath: document.getElementById("input_newfilepath").value,
+                                imagefileName: document.getElementById("input_newfilename").value
+                            },
+                            success: function (data) {
+                                console.log(data);
+                                // Presuming data contains an ID or similar for polling status
+                                document.getElementById("input_pollingid").value = data;
+                                hideModal();
+
+                                // Clear any existing text
+                                document.getElementById("descriptionText").innerText = "";
+                                tryCounter = 0;
+                                // Call updateDescription once and set it to repeat every 3 minutes
+                                updateDescription();
+                                // Store the interval ID
+                                intervalID = setInterval(updateDescription, 60000); // 180000 milliseconds = 3 minutes
+                            },
+                            error: function (xhr, status, error) {
+                                console.log(error);
+                                document.getElementById("input_pollingid").value = "";
+                                hideModal();
+                            }
+                        });
+                    });
+                },
+                error: function () {
+                    alert("An error occurred");
+                    $('.progress').hide();
+                    $('.progress-bar').width('0%').attr('aria-valuenow', 0);
+                    document.getElementById("progressbarmain").style.display = "none";
+                    hideModal(); // Also hide the modal on error
+                }
+            });
+        }
+
+        function updateDescription() {
+            try {
+
+                document.getElementById("spinnerText").innerText = "Analyzing..";
+
+                document.getElementById("descriptionStatus").innerText = "Waiting for Analysis results..";
+                document.getElementById("descriptionSpinner").style.display = "block";
+                document.getElementById("searchingSpinner").style.display = "none";
+                var objectId = document.getElementById("input_pollingid").value;
+
+                var descriptionElement = document.getElementById("descriptionText");
+
+                var descriptionElementText = descriptionElement.innerText;
+
+                var updatedDescription = "We could not retrieve the description. Please contact support.";
+                console.log("text " + descriptionElementText);
+                if (descriptionElementText.trim() == "") {
+                    showModal();
+                    tryCounter++;
+                    document.getElementById("descriptionStatus").innerText = "Checking if Analysis is ready..Try " + tryCounter;
+                    document.getElementById("descriptionSpinner").style.display = "none";
+                    document.getElementById("searchingSpinner").style.display = "block";
+                    // Only poll if the current description is empty
+                    $.ajax({
+                        url: '/Home/CheckDescription', // Update with your actual endpoint
+                        type: 'GET',
+                        data: { objectId: objectId },
+                        success: function (data) {
+                            console.log(data);
+                            document.getElementById("descriptionStatus").innerText = "Waiting for Analysis results..";
+                            document.getElementById("descriptionSpinner").style.display = "block";
+                            document.getElementById("searchingSpinner").style.display = "none";
+
+                            hideModal();
+                            if (data && data.description) {
+                                updatedDescription = data.description;
+                                descriptionElement.innerText = updatedDescription;
+
+                                document.getElementById("descriptionStatus").innerText = "Analysis completed..";
+                                document.getElementById("descriptionSpinner").style.display = "none";
+                                document.getElementById("searchingSpinner").style.display = "none";
+                                tryCounter = 0;
+                                clearInterval(intervalID); // Stop the interval if the condition is met
+                                console.log("Update completed, stopping interval.");
+                            }
+                        },
+                        error: function (xhr, status, error) {
+                            console.log(error);
+                            descriptionElement.innerText = updatedDescription;
+                            document.getElementById("descriptionStatus").innerText = "";
+                            document.getElementById("descriptionSpinner").style.display = "none";
+                            document.getElementById("searchingSpinner").style.display = "none";
+                            hideModal();
+                            tryCounter = 0;
+                        }
+                    });
+                }
+
+            }
+            catch (err) {
+                console.log(err);
+                descriptionElement.innerText = updatedDescription;
+                document.getElementById("descriptionStatus").innerText = "";
+                document.getElementById("descriptionSpinner").style.display = "none";
+                hideModal();
+                tryCounter = 0;
+            }
+        }</script>
+}

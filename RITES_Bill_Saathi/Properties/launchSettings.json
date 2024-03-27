@@ -11,7 +11,7 @@
     "RITES_Bill_Saathi": {
       "commandName": "Project",
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:7063;http://localhost:5139",
+      "applicationUrl": "http://localhost:57961",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
