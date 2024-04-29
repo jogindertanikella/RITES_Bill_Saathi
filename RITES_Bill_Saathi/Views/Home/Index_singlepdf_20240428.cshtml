@@ -1,0 +1,384 @@
+﻿
+@section Styles {
+    <style>
+        .split-pane {
+            height: 100vh;
+            display: flex;
+        }
+
+        .left-pane {
+            flex: 1;
+            border-right: 2px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            justify-content: start;
+            flex-direction: column; /* Ensure vertical alignment for inner elements */
+            padding-right: 6px;
+        }
+
+        .right-pane {
+            flex: 1;
+            padding: 20px;
+        }
+
+        .drag-area {
+            border: 2px dashed #dee2e6;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .image-border {
+            border: 4px solid #2c3e50; /* Solid border with a dark shade */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1), /* Outer shadow */
+            0 4px 20px rgba(0, 0, 0, 0.1); /* Inner depth */
+            max-width: 100%;
+            display: block; /* Adjust display to block to make sure the box-shadow is visible */
+            padding: 3px;
+        }
+
+        .custom-modal-content {
+            background: rgba(255, 255, 255, 0.85); /* Make the background slightly opaque */
+            border: 1px solid #999; /* Add a subtle border */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), /* Outer shadow for depth */
+            0 6px 20px rgba(0, 0, 0, 0.19); /* Inner shadow for emphasis */
+            border-radius: 8px; /* Optional: adds rounded corners to the modal */
+        }
+    </style>
+}
+
+<input type="hidden" id="input_newfilepath" />
+<input type="hidden" id="input_newfilename" />
+
+<input type="hidden" id="input_pollingid" />
+
+<div class="split-pane">
+    <div class="left-pane">
+        <form action="/Home/UploadPDF" method="post" enctype="multipart/form-data" id="uploadForm">
+            <!-- Moved file input to the top -->
+            <div class="input-group mb-3">
+                <input type="file" id="fileupload" name="pdfFile" class="form-control" hidden />
+                <div id="drop-zone" style="border: 2px dashed #007bff; padding: 20px; text-align: center; cursor: pointer;">
+                    Drop your PDF here or click to upload.
+                </div>
+                <button id="btnsubmit" type="submit" class="btn btn-primary">Upload</button>
+            </div>
+        </form>
+        <!-- File Name Display -->
+        <p id="fileNameDisplay" style="text-align: center; margin-top: 20px; display: none;">No file selected</p>
+        <div class="progress" style="width: 90%; margin-top: 20px; display: none;">
+            <div id="progressbarmain" class="progress-bar" role="progressbar" style="width: 0%;display:none;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <img class="image-border" id="convertedImg" style="max-width: 100%;display:none;">
+    </div>
+    <div class="right-pane">
+        <p id="descriptionStatus" style="margin:10px;">Upload the PDF file to get started..</p>
+        <br />
+        <img id="descriptionSpinner" style="display:none;" src="~/img/30seconds.gif" />
+        <img id="searchingSpinner" style="display:none;" src="~/img/searching.gif" />
+
+        <br />     <p id="descriptionText"></p>
+    </div>
+</div>
+
+<!-- Modal Spinner -->
+<div id="loadingModal" class="modal" tabindex="-1" role="dialog" style="display:none; position: fixed; z-index: 1050; top: 0; left: 0; height: 100vh; width: 100vw; background: rgba(0, 0, 0, 0.6);">
+    <!-- Slightly increased the opacity of the background -->
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content custom-modal-content">
+            <!-- Applied the custom class here -->
+            <div class="modal-body" style="text-align: center;">
+                <span style="margin:10px;" id="spinnerText">Processing...</span>
+                <img class="generatingImage" src="~/img/generating.gif" />
+                @*<div class="spinner-border text-light" role="status">
+                        <span class="sr-only" id="spinnerText">Processing...</span>
+                    </div>*@
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <script>// Show modal function
+        function showModal() {
+            $('#loadingModal').show();
+        }
+
+        // Hide modal function
+        function hideModal() {
+            $('#loadingModal').hide();
+        }
+
+        //document.addEventListener("DOMContentLoaded", function () {
+        //    console.log("started");
+        //    // Call updateDescription every 3 minutes
+        //    setInterval(updateDescription, 180000); // 180000 milliseconds = 3 minutes
+        //});
+
+        $(document).ready(function () {
+            var dropZone = document.getElementById('drop-zone');
+            var fileInput = document.getElementById('fileupload');
+            var uploadForm = document.getElementById('uploadForm');
+            var fileNameDisplay = document.getElementById('fileNameDisplay'); // Get the file name display element
+
+            dropZone.addEventListener('click', function () {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', function () {
+                // Show file name when selected using the file dialog
+                if (fileInput.files.length > 0) {
+                    fileNameDisplay.textContent = fileInput.files[0].name; // Set the file name
+                    fileNameDisplay.style.display = 'block'; // Show the file name display
+                }
+            });
+
+            dropZone.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                dropZone.style.backgroundColor = '#f0f0f0';
+            });
+
+            dropZone.addEventListener('dragleave', function (e) {
+                e.preventDefault();
+                dropZone.style.backgroundColor = '';
+            });
+
+            dropZone.addEventListener('drop', function (e) {
+                e.preventDefault();
+                dropZone.style.backgroundColor = '';
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                    // Show file name on drop
+                    fileNameDisplay.textContent = e.dataTransfer.files[0].name; // Set the file name
+                    fileNameDisplay.style.display = 'block'; // Show the file name display
+
+                    // Create a new FormData object and append the file
+                    var formData = new FormData();
+                    formData.append('pdfFile', e.dataTransfer.files[0]);
+                    uploadFile(formData);
+                }
+            });
+        });
+
+        tryCounter = 0;
+
+        employeeId = "";
+
+        function uploadFile(formData) {
+            showModal(); // Show the initial modal spinner when the upload starts
+            document.getElementById("descriptionStatus").innerText = "Uploading PDF file...";
+
+            $.ajax({
+                url: '/Home/UploadPDFAndConvertAllPages',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (data) {
+                    console.log(data);
+                    hideModal(); // Hide the modal spinner after receiving the data
+                    document.getElementById("descriptionStatus").innerText = "PDF uploaded successfully. Converting to images...";
+
+                    var imagesContainer = document.querySelector('.left-pane');
+                    imagesContainer.innerHTML = ''; // Clear the existing content
+
+                    employeeId = data.originalPdfFileName;
+
+                    // Initialize an array to collect promises from uploadImage calls
+                    let imageUploadPromises = [];
+
+                    // Process each image URL individually
+                    data.imageUrls.forEach(function (imageUrl, index) {
+                        var img = document.createElement('img');
+                        img.classList.add('image-border');
+                        img.src = imageUrl;
+                        img.style.display = 'block';
+                        img.style.maxWidth = '100%';
+                        imagesContainer.appendChild(img);
+
+                        document.getElementById("descriptionStatus").innerText = `Processing image ${index + 1} of ${data.imageUrls.length}...`;
+
+                        // Collect each promise from uploadImage
+                        imageUploadPromises.push(
+                            uploadImage(imageUrl).catch(function (error) {
+                                console.log(error);
+                                document.getElementById("descriptionStatus").innerText = "Error processing an image. Please contact support.";
+                            })
+                        );
+                    });
+
+                    // When all images have been processed, format the output
+                    Promise.all(imageUploadPromises).then(function (responses) {
+                        // Map through the responses, parsing each JSON string into an object
+                        const parsedDescriptions = responses.map(response => JSON.parse(response));
+
+                        // Assuming 'employeeId' is meant to be derived from a different part of your application,
+                        // make sure it is assigned correctly here. This is a placeholder example:
+                        // var employeeId = someFunctionToGetEmployeeId();
+
+                        // Now pass the parsed data and the correctly obtained 'employeeId' to formatBillsOutput
+                        let formattedOutput = formatBillsOutput(employeeId, parsedDescriptions);
+                        document.getElementById("descriptionStatus").innerText = "Analysis completed.";
+                        document.getElementById("descriptionText").innerText = formattedOutput;
+                    }).catch(function (error) {
+                        console.log(error);
+                        document.getElementById("descriptionStatus").innerText = "Error in processing images. Please contact support.";
+                    });
+
+                },
+                error: function (xhr, status, error) {
+                    console.log(error);
+                    document.getElementById("descriptionStatus").innerText = "Error uploading PDF. Please try again or contact support.";
+                }
+            });
+        }
+
+
+
+        function uploadImage(imageUrl) {
+            return new Promise((resolve, reject) => {
+                document.getElementById("spinnerText").innerText = "Analyzing..";
+
+                document.getElementById("descriptionStatus").innerText = "Waiting for Analysis results..";
+                document.getElementById("descriptionSpinner").style.display = "block";
+                document.getElementById("searchingSpinner").style.display = "none";
+                showModal();
+                $.ajax({
+                    url: '/Home/ProcessUploadedImage',
+                    type: 'POST',
+                    data: {
+                        imagefilePath: imageUrl,
+                        // Assume imagefileName is either part of imageUrl or not needed; adjust as necessary
+                    },
+                    success: function (data) {
+                        document.getElementById("descriptionSpinner").style.display = "none";
+                        document.getElementById("searchingSpinner").style.display = "none";
+                        hideModal(); // Also hide the modal on error
+                        console.log(data);
+                        resolve(data); // Resolve the promise with the data
+                    },
+                    error: function (xhr, status, error) {
+                        document.getElementById("descriptionSpinner").style.display = "none";
+                        document.getElementById("searchingSpinner").style.display = "none";
+                        hideModal(); // Also hide the modal on error
+                        reject(error); // Reject the promise on error
+                    }
+                });
+            });
+
+            function combineAndTotal(objectsArray) {
+                const combinedResults = {};
+
+                objectsArray.forEach((obj) => {
+                    // Each obj could have different top-level keys, so iterate through them
+                    Object.keys(obj).forEach((key) => {
+                        // Check if the key exists in the combinedResults
+                        if (combinedResults.hasOwnProperty(key)) {
+                            // If the key exists, iterate through its inner keys to sum the amounts
+                            Object.keys(obj[key]).forEach((innerKey) => {
+                                if (combinedResults[key].hasOwnProperty(innerKey)) {
+                                    // Add the amounts if the inner key exists
+                                    combinedResults[key][innerKey] += obj[key][innerKey];
+                                } else {
+                                    // If the inner key doesn't exist in the combinedResults, add it
+                                    combinedResults[key][innerKey] = obj[key][innerKey];
+                                }
+                            });
+                        } else {
+                            // If the key doesn't exist in combinedResults, add it directly
+                            combinedResults[key] = obj[key];
+                        }
+                    });
+                });
+
+                return combinedResults;
+            }
+
+
+        }
+
+        function formatBillsOutput(employeeId, objectsArray) {
+            try {
+                let message = `Employee no. ${employeeId} has submitted the following bills and prescriptions:\n\n`;
+
+                // Define a list of CGHS hospitals for the check
+                const cghsHospitals = [
+                    "DR. JAIN's Swasthya Multispeciality Healthcare And Dental Clinic",
+                    // Add other CGHS recognized hospitals here
+                ];
+
+                function getOrdinalSuffix(i) {
+                    var j = i % 10, k = i % 100;
+                    if (j == 1 && k != 11) {
+                        return i + "st";
+                    }
+                    if (j == 2 && k != 12) {
+                        return i + "nd";
+                    }
+                    if (j == 3 && k != 13) {
+                        return i + "rd";
+                    }
+                    return i + "th";
+                }
+
+                function formatDate(dateString) {
+                    const date = new Date(dateString);
+                    const day = getOrdinalSuffix(date.getDate());
+                    const month = date.toLocaleString('en-US', { month: 'long' });
+                    const year = date.getFullYear();
+                    return `${day} ${month} ${year}`;
+                }
+
+                function isBillValid(billDate) {
+                    const today = new Date();
+                    const oneYearAgo = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+                    return new Date(billDate) >= oneYearAgo;
+                }
+
+                function isCghsHospital(hospitalName) {
+                    // Normalize names for comparison
+                    return cghsHospitals.some(cghsHospital => cghsHospital.toLowerCase() === hospitalName.toLowerCase());
+                }
+
+                let itemCounter = 1;
+
+                objectsArray.forEach((obj) => {
+                    Object.keys(obj).forEach((key) => {
+                        const entityName = key.charAt(0).toUpperCase() + key.replace("Name", "").slice(1);
+                        obj[key].forEach((item) => {
+                            const itemType = item.Total === 0 ? "Prescription" : "Bill";
+                            const amountString = item.Total > 0 ? ` with amount of Rs. ${item.Total}/-` : "";
+                            const validString = isBillValid(item.Date) ? "which is within 1 year of today and hence, it is valid" : "which is not within the 1 year limit and hence, might not be valid";
+
+                            const cghsString = isCghsHospital(item.Name) ? "This is a CGHS hospital" : "This is not a CGHS hospital";
+                            // Ensure the taxability message is included for non-zero amount bills from CGHS hospitals
+
+                            var taxabilityMessage = ".";
+
+                            if (item.Total > 0) {
+                                taxabilityMessage = isCghsHospital(item.Name) ? " and hence, this bill is tax-free." : " and hence, this bill is not tax-free.";
+                            }
+
+                            message += `${itemCounter}. ${entityName} ${itemType} of ${item.Name}${amountString}\nThis ${itemType.toLowerCase()} is dated ${formatDate(item.Date)} ${validString}. ${cghsString}${taxabilityMessage}\n\n`;
+                            itemCounter++;
+                        });
+                    });
+                });
+
+                return message;
+            }
+            catch (err) {
+                console.log(err);
+            }
+        }
+
+
+
+
+        const cghsHospitals = [
+            "DR. JAIN'S SwasThya MULTISPECIALITY HEALTHCARE AND DENTAL CLINIC",
+            // Add other CGHS hospital names here
+        ];
+
+    </script>
+}

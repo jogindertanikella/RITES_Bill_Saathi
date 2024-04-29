@@ -1,33 +1,24 @@
 ﻿@section Styles {
     <style>
         .split-pane {
+            height: 100vh;
             display: flex;
-            flex-direction: column; /* Stack panes vertically */
-            /*height: 100vh;*/ /* Full viewport height */
         }
 
-        .top-pane {
+        .left-pane {
             flex: 1;
-            /*border-bottom: 2px solid #dee2e6;*/ /* Bottom border */
+            border-right: 2px solid #dee2e6;
             display: flex;
             align-items: center;
-            justify-content: center;
-            flex-direction: column; /* Display items vertically */
+            justify-content: start;
+            flex-direction: column; /* Ensure vertical alignment for inner elements */
+            padding-right: 6px;
         }
 
-        .bottom-pane {
+        .right-pane {
             flex: 1;
-            display: flex;
-            flex-direction: column; /* Display items vertically */
-            justify-content: center;
-            align-items: center;
-/*            padding: 20px;*/
+            padding: 20px;
         }
-
-            /* Optional: Adjust spacing between items */
-            .bottom-pane > * {
-                margin-bottom: 10px; /* Add space between each item */
-            }
 
         .drag-area {
             border: 2px dashed #dee2e6;
@@ -52,7 +43,6 @@
             border-radius: 8px; /* Optional: adds rounded corners to the modal */
         }
     </style>
-
 }
 
 <input type="hidden" id="input_newfilepath" />
@@ -61,7 +51,7 @@
 <input type="hidden" id="input_pollingid" />
 
 <div class="split-pane">
-    <div class="top-pane" id="topPane">
+    <div class="left-pane">
         <form action="/Home/UploadPDF" method="post" enctype="multipart/form-data" id="uploadForm">
             <!-- Moved file input to the top -->
             <div class="input-group mb-3">
@@ -79,7 +69,7 @@
         </div>
         <div class="image-container"></div>
     </div>
-    <div class="bottom-pane">
+    <div class="right-pane">
         <p id="descriptionStatus" style="margin:10px;">Upload the PDF file(s) to get started..</p>
         <br />
         <div id="descriptionSpinner" style="display:none;">
@@ -111,10 +101,6 @@
 
 @section Scripts {
     <script>
-
-        tableHTMLComplete = "";
-
-
         function showModal() {
             $('#loadingModal').show();
         }
@@ -137,33 +123,10 @@
             fileInput.addEventListener('change', function () {
                 // Show file names when selected using the file dialog
                 if (fileInput.files.length > 0) {
-                    // Clear previous file name display content
-                    fileNameDisplay.innerHTML = '';
-
-                    // Create a list element to display file names vertically
-                    let fileList = document.createElement('ul');
-                    fileList.style.listStyleType = 'none'; // Remove bullet points
-
-                    // Iterate through each selected file
-                    for (let i = 0; i < fileInput.files.length; i++) {
-                        let fileName = fileInput.files[i].name;
-
-                        // Create a list item for each file name
-                        let listItem = document.createElement('li');
-                        listItem.textContent = fileName;
-
-                        // Append the list item to the file list
-                        fileList.appendChild(listItem);
-                    }
-
-                    // Append the file list to the file name display element
-                    fileNameDisplay.appendChild(fileList);
-
-                    // Show the file name display
-                    fileNameDisplay.style.display = 'block';
+                    fileNameDisplay.textContent = fileInput.files.length + ' file(s) selected';
+                    fileNameDisplay.style.display = 'block'; // Show the file name display
                 }
             });
-
 
             dropZone.addEventListener('dragover', function (e) {
                 e.preventDefault();
@@ -174,100 +137,32 @@
                 e.preventDefault();
                 dropZone.style.backgroundColor = '';
             });
+
             dropZone.addEventListener('drop', function (e) {
                 e.preventDefault();
                 dropZone.style.backgroundColor = '';
-
                 if (e.dataTransfer.files.length > 0) {
-                    // Clear previous file name display content
-                    fileNameDisplay.innerHTML = '';
-
-                    // Create a list element to display file names vertically
-                    let fileList = document.createElement('ul');
-                    fileList.style.listStyleType = 'none'; // Remove bullet points
-
-                    // Set the fileInput files to the dropped files
                     fileInput.files = e.dataTransfer.files;
-
-                    // Iterate through each dropped file
-                    for (let i = 0; i < e.dataTransfer.files.length; i++) {
-                        let fileName = e.dataTransfer.files[i].name;
-
-                        // Create a list item for each file name
-                        let listItem = document.createElement('li');
-                        listItem.textContent = fileName;
-
-                        // Append the list item to the file list
-                        fileList.appendChild(listItem);
-                    }
-
-                    // Append the file list to the file name display element
-                    fileNameDisplay.appendChild(fileList);
-
-                    // Show the file name display
-                    fileNameDisplay.style.display = 'block';
+                    // Show file names on drop
+                    fileNameDisplay.textContent = e.dataTransfer.files.length + ' file(s) selected';
+                    fileNameDisplay.style.display = 'block'; // Show the file name display
                 }
             });
 
-
             // Handle form submission
-            uploadForm.addEventListener('submit', async function (e) {
+            uploadForm.addEventListener('submit', function (e) {
                 e.preventDefault();
 
-                document.getElementById("topPane").style.display = "none";
-
-                // Get a reference to the descriptionText element
-                let descriptionTextElement = document.getElementById("descriptionText");
-
-                // Start building the table structure
-                let tableHTMLComplete = '<table id="dataTable" class="display" style="width: 100%; border: 1px solid #ddd;"> <thead> <tr> <th>Employee ID</th> <th>Entity Name</th> <th>Item Type</th> <th>Item Name</th> <th>Amount</th> <th>Date</th> <th>Validity</th> <th>Hospital Type</th> <th>Verified</th><th>Correct</th></tr> </thead> <tbody>';
-
                 if (fileInput.files.length > 0) {
-                    // Iterate through each file
                     for (let i = 0; i < fileInput.files.length; i++) {
                         let formData = new FormData();
                         formData.append('pdfFile', fileInput.files[i]);
 
                         // Call uploadFile asynchronously for each PDF
-                        var result = await uploadFile(formData);
-
-                        tableHTMLComplete += result;
+                        uploadFile(formData);
                     }
                 }
-
-                // Finalize the table structure
-                tableHTMLComplete += '</tbody></table>';
-
-                // Set the table HTML inside descriptionTextElement
-                descriptionTextElement.innerHTML = tableHTMLComplete;
-
-                // Find the table element inside descriptionTextElement
-                let dataTableElement = $(descriptionTextElement).find('table');
-
-                // Initialize DataTable on the found table element
-                let dataTable = dataTableElement.DataTable({
-                    // DataTables configuration options
-                    paging: true, // Enable pagination
-                    searching: true, // Enable searching
-                    ordering: true, // Enable sorting
-                    dom: 'Bfrtip', // Include DataTables Buttons
-                    buttons: [
-                        'copy', 'excel', 'csv', 'pdf', 'print' // Enable export buttons
-                    ]
-                });
-
-
-                // Optional: Customize export button text (e.g., for localization)
-                $.extend(true, $.fn.dataTable.Buttons.defaults, {
-                    dom: {
-                        button: {
-                            className: 'btn'
-                        }
-                    }
-                });
             });
-
-
         });
 
         tryCounter = 0;
@@ -275,94 +170,106 @@
         employeeId = "";
 
         function uploadFile(formData) {
-
             // Show the initial modal spinner when the upload starts
             showModal();
+            document.getElementById("descriptionStatus").innerText = "Uploading PDF file...";
 
-            let fileNameForUpload = formData.get('pdfFile').name;
+            $.ajax({
+                url: '/Home/UploadPDFAndConvertAllPages',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (data) {
+                    console.log(data);
+                    hideModal(); // Hide the modal spinner after receiving the data
+                    document.getElementById("descriptionStatus").innerText = "PDF uploaded successfully. Converting to images...";
 
-            document.getElementById("descriptionStatus").innerText = `Uploading PDF file - ${fileNameForUpload }`;
+                    var imagesContainer = document.querySelector('.left-pane');
+                 //   imagesContainer.innerHTML = ''; // Clear the existing content
 
-            // Return a promise to handle asynchronous processing
-            return new Promise((resolve, reject) => {
-                $.ajax({
-                    url: '/Home/UploadPDFAndConvertAllPages',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function (data) {
-                        console.log(data);
-                        hideModal(); // Hide the modal spinner after receiving the data
-                        document.getElementById("descriptionStatus").innerText = "PDF uploaded successfully. Converting to images...";
+                    employeeId = data.originalPdfFileName;
 
-                        var imagesContainer = document.querySelector('.top-pane');
+                    // Initialize an array to collect promises from uploadImage calls
+                    let imageUploadPromises = [];
 
-                        // Initialize an array to collect promises from uploadImage calls
-                        let imageUploadPromises = [];
+                    // Process each image URL individually
+                    data.imageUrls.forEach(function (imageUrl, index) {
+                        var img = document.createElement('img');
+                        img.classList.add('image-border');
+                        img.src = imageUrl;
+                        img.style.display = 'none';
+                        img.style.maxWidth = '30%';
+                        imagesContainer.appendChild(img);
 
-                        // Process each image URL individually
-                        data.imageUrls.forEach(function (imageUrl, index) {
-                            var img = document.createElement('img');
-                            img.classList.add('image-border');
-                            img.src = imageUrl;
-                            img.style.display = 'none';
-                            img.style.maxWidth = '30%';
-                            imagesContainer.appendChild(img);
+                        document.getElementById("descriptionStatus").innerText = `Processing image ${index + 1} of ${data.imageUrls.length}...`;
 
-                            document.getElementById("descriptionStatus").innerText = `Processing image ${index + 1} of ${data.imageUrls.length}...`;
+                        // Collect each promise from uploadImage
+                        imageUploadPromises.push(
+                            uploadImage(imageUrl).catch(function (error) {
+                                console.log(error);
+                                document.getElementById("descriptionStatus").innerText = "Error processing an image. Please contact support.";
+                            })
+                        );
+                    });
 
-                            // Collect each promise from uploadImage
-                            imageUploadPromises.push(
-                                uploadImage(imageUrl).catch(function (error) {
-                                    console.log(error);
-                                    document.getElementById("descriptionStatus").innerText = "Error processing an image. Please contact support.";
-                                })
-                            );
+                    // When all images have been processed, format the output
+                    Promise.all(imageUploadPromises).then(function (responses) {
+                        // Map through the responses, parsing each JSON string into an object
+                        const parsedDescriptions = responses.map(response => JSON.parse(response));
+
+                        // Assuming 'employeeId' is meant to be derived from a different part of your application,
+                        // make sure it is assigned correctly here. This is a placeholder example:
+                        // var employeeId = someFunctionToGetEmployeeId();
+
+                        // Initialize a variable to accumulate the status messages
+                        let statusMessages = "";
+
+                        // Iterate over the parsed descriptions to gather status information
+                        parsedDescriptions.forEach((parsedDescription, index) => {
+                            // Update the status message with the current image processing status
+                            statusMessages += `Image ${index + 1}: ${parsedDescription.status}\n`;
                         });
 
-                        // When all images have been processed, format the output
-                        Promise.all(imageUploadPromises).then(function (responses) {
-                            // Map through the responses, parsing each JSON string into an object
-                            const parsedDescriptions = responses.map(response => JSON.parse(response));
+                        // Update the descriptionStatus element by appending the status messages
+                        const descriptionStatusElement = document.getElementById("descriptionStatus");
+                        descriptionStatusElement.innerText += statusMessages;
 
-                            // Assuming 'employeeId' is meant to be derived from a different part of your application,
-                            // make sure it is assigned correctly here. This is a placeholder example:
-                            // var employeeId = someFunctionToGetEmployeeId();
+                        // Format the bills output based on the parsed descriptions and employeeId
+                        let formattedOutput = formatBillsOutput(employeeId, parsedDescriptions);
 
-                            // Format the bills output based on the parsed descriptions and employeeId
-                            let formattedOutput = formatBillsOutput(employeeId, parsedDescriptions);
+                        // Create a new <div> element to hold the table
+                        let newTableDiv = document.createElement('div');
 
-                            // Set the final status message once all processing is completed
-                            document.getElementById("descriptionStatus").innerText = "Analysis completed.";
+                        // Set the inner HTML of the new <div> element to the formatted output (table)
+                        newTableDiv.innerHTML = formattedOutput;
 
-                            document.getElementById("descriptionStatus").style.display = "none";
+                        // Get a reference to the descriptionText element
+                        let descriptionTextElement = document.getElementById("descriptionText");
 
-                            // Resolve the promise with the formatted output
-                            resolve(formattedOutput);
-                        }).catch(function (error) {
-                            console.log(error);
-                            document.getElementById("descriptionStatus").innerText = "Error in processing images. Please contact support.";
-                            reject(error);
-                        });
-                    },
-                    error: function (xhr, status, error) {
+                        // Append the new <div> (containing the table) to the descriptionText element
+                        descriptionTextElement.appendChild(newTableDiv);
+
+                    // Set the final status message once all processing is completed
+                        descriptionStatusElement.innerText = "Analysis completed.";
+                    }).catch(function (error) {
                         console.log(error);
-                        document.getElementById("descriptionStatus").innerText = "Error uploading PDF. Please try again or contact support.";
-                        reject(error);
-                    }
-                });
+                        document.getElementById("descriptionStatus").innerText = "Error in processing images. Please contact support.";
+                    });
+
+
+                },
+                error: function (xhr, status, error) {
+                    console.log(error);
+                    document.getElementById("descriptionStatus").innerText = "Error uploading PDF. Please try again or contact support.";
+                }
             });
         }
 
 
-
         function uploadImage(imageUrl) {
             return new Promise((resolve, reject) => {
-
-                let fileNameForUpload = extractFilenameFromUrl(imageUrl);
-
-                document.getElementById("spinnerText").innerText = "Analyzing " + fileNameForUpload + "...";
+                document.getElementById("spinnerText").innerText = "Analyzing..";
 
                 document.getElementById("descriptionStatus").innerText = "Waiting for Analysis results..";
                 document.getElementById("descriptionSpinner").style.display = "block";
@@ -424,7 +331,20 @@
 
         function formatBillsOutput(employeeId, objectsArray) {
             try {
-                let tableHTML = '';
+                let tableHTML = `<table style="border-collapse: collapse; width: 100%; border: 1px solid #ddd; padding: 8px; text-align: left;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid #ddd;">
+                                    <th style="padding: 8px;">Employee ID</th>
+                                    <th style="padding: 8px;">Entity Name</th>
+                                    <th style="padding: 8px;">Item Type</th>
+                                    <th style="padding: 8px;">Item Name</th>
+                                    <th style="padding: 8px;">Amount</th>
+                                    <th style="padding: 8px;">Date</th>
+                                    <th style="padding: 8px;">Validity</th>
+                                    <th style="padding: 8px;">Hospital Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
 
                 // Define a list of CGHS hospitals for the check
                 const cghsHospitals = [
@@ -447,19 +367,11 @@
                 }
 
                 function formatDate(dateString) {
-                    try {
-                        const date = new Date(dateString);
-                        if (isNaN(date)) {
-                            return ''; // Return empty string if date string cannot be parsed
-                        }
-                        const day = getOrdinalSuffix(date.getDate());
-                        const month = date.toLocaleString('en-US', { month: 'long' });
-                        const year = date.getFullYear();
-                        return `${day} ${month} ${year}`;
-                    } catch (error) {
-                        console.error(`Error formatting date: ${dateString}`, error);
-                        return ''; // Return empty string in case of error
-                    }
+                    const date = new Date(dateString);
+                    const day = getOrdinalSuffix(date.getDate());
+                    const month = date.toLocaleString('en-US', { month: 'long' });
+                    const year = date.getFullYear();
+                    return `${day} ${month} ${year}`;
                 }
 
                 function isBillValid(billDate) {
@@ -484,15 +396,22 @@
                             const validString = isBillValid(item.Date) ? "Valid" : "Not Valid";
                             const cghsString = isCghsHospital(item.Name) ? "CGHS Hospital" : "Non-CGHS Hospital";
 
-                            // Check if any string value contains "NaN"; render as blank if true
-                            const itemName = item.Name.includes("NaN") ? '' : item.Name;
-                            const dateFormatted = formatDate(item.Date);
-
-                            tableHTML += `<tr style="border-bottom: 1px solid #ddd;"><td style="padding: 8px;">${employeeId}</td><td style="padding: 8px;">${entityName}</td><td style="padding: 8px;">${itemType}</td><td style="padding: 8px;">${itemName}</td><td style="padding: 8px;">${amountString}</td><td style="padding: 8px;">${dateFormatted}</td><td style="padding: 8px;">${validString}</td><td style="padding: 8px;">${cghsString}</td><td style="padding: 8px;text-align: center;"><input type="checkbox"></td><td style="padding: 8px;text-align: center;"><input type="checkbox"></td></tr>`;
+                            tableHTML += `<tr style="border-bottom: 1px solid #ddd;">
+                                    <td style="padding: 8px;">${employeeId}</td>
+                                    <td style="padding: 8px;">${entityName}</td>
+                                    <td style="padding: 8px;">${itemType}</td>
+                                    <td style="padding: 8px;">${item.Name}</td>
+                                    <td style="padding: 8px;">${amountString}</td>
+                                    <td style="padding: 8px;">${formatDate(item.Date)}</td>
+                                    <td style="padding: 8px;">${validString}</td>
+                                    <td style="padding: 8px;">${cghsString}</td>
+                                </tr>`;
                             itemCounter++;
                         });
                     });
                 });
+
+                tableHTML += `</tbody></table>`;
 
                 return tableHTML;
             } catch (err) {
@@ -501,22 +420,6 @@
             }
         }
 
-
-        function extractFilenameFromUrl(url) {
-            // Split the URL string by the '?' character
-            const parts = url.split('?');
-
-            // Extract the first part which contains the filename
-            const firstPart = parts[0];
-
-            // Split the first part by '/' to get the segments
-            const segments = firstPart.split('/');
-
-            // Get the last segment which is the filename
-            const filename = segments[segments.length - 1];
-
-            return filename;
-        }
 
 
         // Define a list of CGHS hospitals for the check
@@ -556,5 +459,8 @@
         function isCghsHospital(hospitalName) {
             // Normalize names for comparison
             return cghsHospitals.some(cghsHospital => cghsHospital.toLowerCase() === hospitalName.toLowerCase());
-        }</script>
+        }
+
+
+    </script>
 }

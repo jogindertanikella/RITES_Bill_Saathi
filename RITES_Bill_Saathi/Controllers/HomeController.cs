@@ -22,7 +22,7 @@ namespace RITES_Bill_Saathi.Controllers;
 public class HomeController : Controller
 {
     private readonly string endpoint = "https://centralindia.api.cognitive.microsoft.com/";
-    private readonly string apiKey = "0817161aa32d40daac59ce64be3fa819";
+    private readonly string apiKey = "563663b409bf455097ff801e32c5aa8b";
     private readonly AzureKeyCredential credential;
 
     public HomeController()
@@ -80,7 +80,9 @@ public class HomeController : Controller
 
     public async Task<ImageUrlResult> ConvertPdfToJpeg(string fileUrl, int pageNumber)
     {
-        string customImageName = UniversalHelper.GenerateFileName("jpg");
+        try
+        {
+            string customImageName = UniversalHelper.GenerateFileName("jpg");
 
         var client = new RestClient("https://api.pdf.co/v1/pdf/convert/to/jpg");
 
@@ -118,10 +120,27 @@ public class HomeController : Controller
 
         return imageUrlResult;
     }
+        catch (Exception ex)
+        {
+            // Return a default image URL if no file is uploaded
+            string imageUrlDefault = "https://accelracer.com/medicalbills/default.jpg";
+            string imageNameDefault = "default.jpg";
+
+           ImageUrlResult imageUrlResult = new ImageUrlResult();
+
+
+            imageUrlResult.imageUrl = imageUrlDefault;
+            imageUrlResult.imageName = imageNameDefault;
+
+            return imageUrlResult;
+        }
+    }
 
     public async Task<ImageUrlsResult> ConvertPdfToJpegAllPages(string fileUrl)
     {
-        string customImageName = UniversalHelper.GenerateFileName("jpg");
+        try
+        {
+            string customImageName = UniversalHelper.GenerateFileName("jpg");
 
         var client = new RestClient("https://api.pdf.co/v1/pdf/convert/to/jpg");
 
@@ -152,6 +171,24 @@ public class HomeController : Controller
         imageUrlsResult.imageName = customImageName;
 
         return imageUrlsResult;
+        }
+        catch (Exception ex)
+        {
+            // Return a default image URL if no file is uploaded
+            string imageUrlDefault = "https://accelracer.com/medicalbills/default.jpg";
+            string imageNameDefault = "default.jpg";
+
+            ImageUrlsResult imageUrlsResult = new ImageUrlsResult();
+
+
+            List<string> urls = new List<string> { imageUrlDefault };
+
+            imageUrlsResult.imageUrls = urls;
+            imageUrlsResult.imageName = imageNameDefault;
+
+
+            return imageUrlsResult;
+        }
     }
 
     // Supporting class to hold the result
@@ -166,6 +203,8 @@ public class HomeController : Controller
 
     public async Task<string> UploadFilePDFAPI(string pdfFilePath)
     {
+        try
+        {
         var client = new RestClient("https://api.pdf.co/v1/file/upload");
         //client.Timeout = -1;
         var request = new RestRequest();
@@ -182,6 +221,13 @@ public class HomeController : Controller
 
 
         return uploadedfileurl; // This should be replaced with the actual file URL from the response
+        }
+        catch (Exception ex)
+        {
+            // Return a default PDF URL in case of an exception
+            string pdfUrlDefault = "https://accelracer.com/medicalbills/434_Medicine_1-1.pdf";
+            return pdfUrlDefault;
+        }
     }
 
 
@@ -246,6 +292,8 @@ public class HomeController : Controller
                     await pdfFile.CopyToAsync(stream);
                 }
 
+                string OriginalPdfFileName = Path.GetFileNameWithoutExtension(pdfFile.FileName);
+
                 string pdfFilePath = tempPdfPath;
 
                 // Upload the PDF file and get the URL
@@ -263,17 +311,18 @@ public class HomeController : Controller
                 List<string> imageUrls = imageUrlsResult.imageUrls;
                 string imageName = imageUrlsResult.imageName;
 
-                return Json(new { ImageUrls = imageUrls, ImageFileName = imageName });
+                // Include original PDF filename in the response
+                return Json(new { ImageUrls = imageUrls, ImageFileName = imageName, OriginalPdfFileName = OriginalPdfFileName });
             }
-            // Return a default image URL if no file is uploaded
+            // Return a default image URL if no file is uploaded, including a placeholder for original PDF filename
             string imageUrlDefault = "https://accelracer.com/medicalbills/default.jpg";
-            return Json(new { ImageUrls = new List<string> { imageUrlDefault }, ImageFileName = "default.jpg" });
+            return Json(new { ImageUrls = new List<string> { imageUrlDefault }, ImageFileName = "default.jpg", OriginalPdfFileName = "NoFileUploaded.pdf" });
         }
         catch (Exception ex)
         {
-            // Return a default image URL in case of an exception
+            // Return a default image URL in case of an exception, including a placeholder for original PDF filename
             string imageUrlDefault = "https://accelracer.com/medicalbills/default.jpg";
-            return Json(new { ImageUrls = new List<string> { imageUrlDefault }, ImageFileName = "default.jpg" });
+            return Json(new { ImageUrls = new List<string> { imageUrlDefault }, ImageFileName = "default.jpg", OriginalPdfFileName = "Error.pdf" });
         }
     }
 

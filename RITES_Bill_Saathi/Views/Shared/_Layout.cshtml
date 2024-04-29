@@ -4,19 +4,33 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - RITES_Bill_Saathi</title>
+    <link rel="icon" type="image/x-icon" href="~/favicon.ico" /> <!-- Include favicon -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/RITES_Bill_Saathi.styles.css" asp-append-version="true" />
-    @*<link rel="stylesheet" href="~/js/barber-shop.css" />*@
-    @*<script src="~/js/pace.min.js"></script>*@
-    @RenderSection("Styles", required: false) <!-- Add this line -->
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
+    <!-- DataTables Buttons CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.3.0/css/buttons.dataTables.min.css">
+
+    <style>
+        .footer {
+            position: fixed; /* Keeps footer at the bottom of the screen */
+            bottom: 0; /* Aligns the footer at the bottom of the viewport */
+            left: 0; /* Aligns the footer to the left of the viewport */
+            width: 100%; /* Ensures the footer spans the width of the viewport */
+            z-index: 1000; /* Ensures it's on top of other content */
+            background: #fff; /* Optional: Sets a background color for the footer */
+        }
+    </style>
+    @RenderSection("Styles", required: false)
 </head>
 <body>
     <header>
         <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container-fluid">
                 <img src="~/img/RITES_Logo.png" style="height:100px;margin-right:30px;" />
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">RITES Bill Saathi</a>
+                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">RITES Employee Bill Validation System</a>
                 <button style="display:none;" class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
@@ -42,13 +56,21 @@
 
     <footer class="border-top footer text-muted">
         <div class="container">
-            &copy; 2024 - RITES Bill Saathi - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            &copy; 2024 - RITES Employee Bill Validation System - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
         </div>
     </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
-    <script src="~/js/masonry.pkgd.min.js"></script>
+    @*<script src="~/js/masonry.pkgd.min.js"></script>*@
+    <!-- JSZip (required by Buttons) -->
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <!-- DataTables JS -->
+    <script type="text/javascript" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
+    <!-- DataTables Buttons JS -->
+    <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.3.0/js/dataTables.buttons.min.js"></script>
+    <!-- Buttons HTML5 export JS -->
+    <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.3.0/js/buttons.html5.min.js"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
